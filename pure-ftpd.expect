@@ -1,0 +1,108 @@
+#!/usr/bin/expect
+
+#Usage script <host> <ssh user> <ssh password>
+
+set prompt "(%|#|\\$) $"
+set timeout 10
+set ftp_user "USER FTP"
+set ftp_pass "PASS FTP"
+set flag_file "msk.txt"
+
+spawn ssh [lindex $argv 1]@[lindex $argv 0]
+
+
+expect "yes/no" { 
+	send "yes\r"
+	expect "*?assword" { 
+	 send "[lindex $argv 2]\r" 
+	 }
+	} "*?assword" { 
+	send "[lindex $argv 2]\r" 
+	}
+
+expect -re $prompt
+
+#command block
+
+#install pure-ftpd
+send -- "sudo yum install pure-ftpd\r"
+
+#expect "*?y/d/N" { 
+	#send "y\r"
+	#}
+	
+expect {
+	"*?\[y/d/N\]" { send -- "y\r"; exp_continue }
+	"*?y/d/N" { send -- "y\r" }
+}	
+
+
+expect -re $prompt	
+	
+#add group, user, ftp user
+send -- "sudo groupadd $ftp_user\r"
+send -- "sudo useradd -g $ftp_user -d /dev/null -s /bin/nologin $ftp_user\r"
+send -- "sudo mkdir /app\r"
+send -- "sudo mkdir /app/$ftp_user\r"
+send -- "sudo chown -R $ftp_user:$ftp_user /app/$ftp_user && sudo chmod -R 777 /app/$ftp_user\r"
+send -- "touch /app/$ftp_user/$flag_file\r"
+send -- "sudo chown $ftp_user:$ftp_user /app/$ftp_user/$flag_file\r"
+send -- "sudo pure-pw useradd $ftp_user -u $ftp_user -g $ftp_user -d /app/ium_balanser\r"
+sleep 2
+expect {
+    "*?assword" { send -- "$ftp_pass\r"; exp_continue }
+	"*?again" { send -- "$ftp_pass\r" }
+}
+
+expect -re $prompt
+
+send -- "sudo pure-pw mkdb\r" 
+
+
+send -- "ls -l /etc/pure-ftpd/\r"
+expect -re $prompt
+
+
+send -- "exit\r"
+
+
+spawn /usr/bin/scp ./pure-ftpd.conf [lindex $argv 1]@[lindex $argv 0]:/tmp/
+
+expect "yes/no" { 
+	send "yes\r"
+	expect "*?assword" { 
+	 send "[lindex $argv 2]\r" 
+	 }
+	} "*?assword" { 
+	send "[lindex $argv 2]\r" 
+	}
+
+
+
+spawn ssh [lindex $argv 1]@[lindex $argv 0]
+
+
+expect "yes/no" { 
+	send "yes\r"
+	expect "*?assword" { 
+	 send "[lindex $argv 2]\r" 
+	 }
+	} "*?assword" { 
+	send "[lindex $argv 2]\r" 
+	}
+
+expect -re $prompt
+
+send -- "sudo mv /tmp/pure-ftpd.conf /etc/pure-ftpd/\r"
+send -- "sudo service pure-ftpd restart\r"
+expect -re $prompt
+send -- "service pure-ftpd status\r"
+expect -re $prompt
+send -- "sudo pure-pw show $ftp_user\r"
+expect -re $prompt
+
+send -- "exit\r"
+
+
+expect eof
+exit
